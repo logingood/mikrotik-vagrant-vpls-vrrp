@@ -22,6 +22,34 @@ All the IP addresses can be configured by modifying the hash at the top of Vagra
 
 We build a VPLS tunnel from `r1` to `pe1`
 
+`peer1`, `peer2`, `ce1`, `ce2` are ubuntu18 VMs.
+
+# Usage
+
+Bring everything up (takes some time)
+
+```
+vagrant up
+```
+
+Destroying the lab
+
+```
+vagrant destroy -f
+```
+
+# Connect to the nodes
+
+```
+vagrant ssh $router_name
+```
+
+e.g.
+
+```
+vagrant ssh r1
+```
+
 # Important note
 
 I spend some time trying to figure out why VPLS didn't work on Virtualbox
@@ -36,3 +64,8 @@ Vagrant allows to do that using the following snippet
         virtualbox.customize ["modifyvm", :id, "--nicpromisc4", "allow-all"] if h[:ip_ce] || h[:internet]
       end
 ```
+
+# Box images
+
+We are using Vagrant Box published by
+[cheretbe/packer-routeros](https://github.com/cheretbe/packer-routeros)
