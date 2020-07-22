@@ -2,17 +2,20 @@
 
 Vagrant lab that we use as a test bed for:
 
-* Martini VPLS
+* Martini VPLS between R1, R77 and CE1 (2 tunnels each router)
 * VRRP between two RouterOS routers
 * IPoE over VPLS
 
+# Diagram
+
+
+![alt text](https://github.com/logingood/mikrotik-vagrant-vpls-vrrp/blob/master/diagram.png "VRRP and VPLS on virtual mikrotiks")
+
+
 # Configuration
 
-peer1 - r1  - p1 - pe1 - ce1
-      |     |    |     |
-peer2 - r77 - p2 - pe2 - ce2
 
-* `peer1`, `r1`, `r77` and `peer2` are connected to the network called `internet`
+* `peer1`, `r1`, `r77` and `peer2` are connected to the network called `internet` - `10.0.10.0/24` and `10.0.10.254` is VRRP VIP
 * `r1`, `r77` are connected to the network `core` - we use `192.168.100.0/24`
 * `p1`, `p2` are connect to `core` and `core_pe` - we use `192.168.200.0/24`
 * `pe1`, `pe2` are connect to `core_pe` and `ce`
