@@ -20,7 +20,11 @@ peer2 - r77 - p2 - pe2 - ce2
 Loopback uses `10.255.255.x` addresses and assigned with the iterator of the hash.
 All the IP addresses can be configured by modifying the hash at the top of Vagrantfile.
 
-We build a VPLS tunnel from `r1` to `pe1`
+We build a VPLS tunnel from `r1`, `r77` and  `pe1` (each rouer has two tunnels)
+
+VRRP is build between interface called `internet` (bridge) of `r1` and `r77`
+
+Loops are solved with RSTP
 
 `peer1`, `peer2`, `ce1`, `ce2` are ubuntu18 VMs.
 
