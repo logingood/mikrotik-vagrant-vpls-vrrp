@@ -4,21 +4,27 @@
 routers = {
   peer1: {
     fwd_port: 18040,
-    internet: '10.0.0.1'
+    internet: '10.0.1.3',
+    internet_addr: '1.1.1.1'
   },
   peer2: {
     fwd_port: 18041,
-    internet: '10.0.0.2'
+    internet: '10.0.1.4',
+    internet_addr: '2.2.2.2'
   },
   r1: {
     fwd_port: 18001,
-    internet: '10.0.0.3',
-    ip_core: '192.168.100.11'
+    internet: '10.0.1.1',
+    ip_core: '192.168.100.11',
+    vpls_ip: '10.0.10.1/24',
+    vrrp: '10.0.10.254/32'
   },
   r77: {
     fwd_port: 18077,
     internet: '10.0.1.2',
-    ip_core: '192.168.100.12'
+    ip_core: '192.168.100.12',
+    vpls_ip: '10.0.10.77/24',
+    vrrp: '10.0.10.254/32'
   },
   p1: {
     fwd_port: 18021,
@@ -42,11 +48,13 @@ routers = {
   },
   ce1: {
     fwd_port: 18051,
-    ip_ce: '10.0.0.5'
+    ip_ce: '10.0.10.10',
+    vrrp_gw: '10.0.10.254'
   },
   ce2: {
     fwd_port: 18052,
-    ip_ce: '10.0.0.6'
+    ip_ce: '10.0.10.20',
+    vrrp_gw: '10.0.10.254'
   }
 }
 
@@ -62,6 +70,7 @@ Vagrant.configure("2") do |config|
       if router.to_s == "ce1" || router.to_s == "ce2"
         r.vm.box = "ubuntu/bionic64"
         r.vm.network :private_network, ip: h[:ip_ce].to_s, netmask: 24, name: 'ce', virtualbox__intnet: "ce"
+        r.vm.provision :shell, :inline => "ip route delete default 2>&1 >/dev/null || true; ip route add default via #{h[:vrrp_gw]}"
         i = i + 1
         next
       end
@@ -70,6 +79,7 @@ Vagrant.configure("2") do |config|
       if router.to_s == "peer1" || router.to_s == "peer2"
         r.vm.box = "ubuntu/bionic64"
         r.vm.network :private_network, ip: h[:internet].to_s, netmask: 24, name: 'internet', virtualbox__intnet: "internet"
+        r.vm.provision :shell, :inline => "ifconfig enp0s8:0 #{h[:internet_addr]}/32"
         i = i + 1
         next
       end
@@ -108,10 +118,8 @@ Vagrant.configure("2") do |config|
 
         # OSPF areas
         r.vm.provision 'routeros_command', name: 'ospf_2', command: "routing ospf instance set distribute-default=never redistribute-connected=as-type-1 router-id=10.255.255.#{i + 1} numbers=default"
-        r.vm.provision 'routeros_command', name: 'ospf_3', command: "routing ospf network add area=backbone network=#{IPAddr.new(h[:internet] + '/24').to_s}/24" if h[:internet]
         r.vm.provision 'routeros_command', name: 'ospf_4', command: "routing ospf network add area=backbone network=#{IPAddr.new(h[:ip_core] + '/24').to_s}/24" if h[:ip_core]
         r.vm.provision 'routeros_command', name: 'ospf_5', command: "routing ospf network add area=backbone network=#{IPAddr.new(h[:ip_core_pe] + '/24').to_s}/24" if h[:ip_core_pe]
-        r.vm.provision 'routeros_command', name: 'ospf_6', command: "routing ospf network add area=backbone network=#{IPAddr.new(h[:ip_ce] + '/24').to_s}/24" if h[:ip_ce]
 
         # MPLS setup
         r.vm.provision 'routeros_command', name: 'mpls_2', command: "mpls ldp set enabled=yes lsr-id=10.255.255.#{i + 1} transport-address=10.255.255.#{i + 1}"
@@ -119,20 +127,54 @@ Vagrant.configure("2") do |config|
         r.vm.provision 'routeros_command', name: 'mpls_3', command: "mpls ldp interface add interface=[/interface ethernet get [find mac-address=\"#{gen_mac_c(3, n + i)}\"] name ]" if h[:ip_core_pe]
       end
 
-      # VPLS tunnels, advertise 1508 mtu to squeeze PPPPoE
-
       if router.to_s == 'pe1'
-        r.vm.provision 'routeros_command', name: 'vpls1', command: '/interface vpls add disabled=no l2mtu=1508 mac-address=00:00:00:00:00:A1 name=ce1r1 remote-peer=10.255.255.3 vpls-id=100:1'
-        r.vm.provision 'routeros_command', name: 'vpls2', command: '/interface bridge add mtu=1508 name=internet'
-        r.vm.provision 'routeros_command', name: 'vpls3', command: '/interface bridge port add bridge=internet interface=ce1r1 horizon=1'
-        r.vm.provision 'routeros_command', name: 'vpls4', command: "/interface bridge port add bridge=internet interface=[/interface ethernet get [find mac-address=\"#{gen_mac_c(4, n + i)}\"] name ]"
+        r.vm.provision 'routeros_command', name: 'vpls1', command: '/interface bridge add name=internet'
+        # PE1 <-> R1
+        r.vm.provision 'routeros_command', name: 'vpls2', command: '/interface vpls add disabled=no name=pe1r1 remote-peer=10.255.255.3 vpls-id=100:1'
+        r.vm.provision 'routeros_command', name: 'vpls3', command: '/interface bridge port add bridge=internet interface=pe1r1 horizon=1'
+
+
+        # PE1 <-> R77
+        r.vm.provision 'routeros_command', name: 'vpls4', command: '/interface vpls add disabled=no name=pe1r77 remote-peer=10.255.255.4 vpls-id=100:1'
+        r.vm.provision 'routeros_command', name: 'vpls5', command: '/interface bridge port add bridge=internet interface=pe1r77 horizon=1'
+
+        # add port to ce1/ce2
+        r.vm.provision 'routeros_command', name: 'vpls6', command: "/interface bridge port add bridge=internet interface=[/interface ethernet get [find mac-address=\"#{gen_mac_c(4, n + i)}\"] name ]"
+
       end
 
       if router.to_s == 'r1'
-        r.vm.provision 'routeros_command', name: 'vpls5', command: '/interface vpls add disabled=no l2mtu=1508 mac-address=00:00:00:00:00:A2 name=r1ce1 remote-peer=10.255.255.7 vpls-id=100:1'
-        r.vm.provision 'routeros_command', name: 'vpls6', command: '/interface bridge add mtu=1508 name=internet'
-        r.vm.provision 'routeros_command', name: 'vpls7', command: '/interface bridge port add bridge=internet interface=r1ce1 horizon=1'
-        r.vm.provision 'routeros_command', name: 'vpls8', command: "/interface bridge port add bridge=internet interface=[/interface ethernet get [find mac-address=\"#{gen_mac_c(1, n + i)}\"] name ]"
+        r.vm.provision 'routeros_command', name: 'vpls7', command: '/interface bridge add name=internet'
+
+        r.vm.provision 'routeros_command', name: 'vpls8', command: '/interface vpls add disabled=no name=r1r77 remote-peer=10.255.255.4 vpls-id=100:1'
+        r.vm.provision 'routeros_command', name: 'vpls9', command: '/interface bridge port add bridge=internet interface=r1r77 horizon=1'
+
+        r.vm.provision 'routeros_command', name: 'vpls10', command: '/interface vpls add disabled=no name=r1pe1 remote-peer=10.255.255.7 vpls-id=100:1'
+        r.vm.provision 'routeros_command', name: 'vpls11', command: '/interface bridge port add bridge=internet interface=r1pe1 horizon=1'
+
+        # VRRP
+        r.vm.provision 'routeros_command', name: 'vrrp1', command: "/interface vrrp add name=vrrp1 interface=internet priority=100"
+        r.vm.provision 'routeros_command', name: 'vrrp2', command: "/ip address add address=#{h[:vpls_ip]} interface=internet"
+        r.vm.provision 'routeros_command', name: 'vrrp3', command: "/ip address add address=#{h[:vrrp]} interface=vrrp1"
+        # add default gw
+        r.vm.provision 'routeros_command', name: 'vrrp4', command: "/ip route add dst-address=0.0.0.0/0 gateway=10.0.1.4"
+      end
+
+      if router.to_s == 'r77'
+        r.vm.provision 'routeros_command', name: 'vpls12', command: '/interface bridge add name=internet'
+
+        r.vm.provision 'routeros_command', name: 'vpls13', command: '/interface vpls add disabled=no name=r77r1 remote-peer=10.255.255.3 vpls-id=100:1'
+        r.vm.provision 'routeros_command', name: 'vpls14', command: '/interface bridge port add bridge=internet interface=r77r1 horizon=1'
+
+        r.vm.provision 'routeros_command', name: 'vpls15', command: '/interface vpls add disabled=no name=r77pe1 remote-peer=10.255.255.7 vpls-id=100:1'
+        r.vm.provision 'routeros_command', name: 'vpls16', command: '/interface bridge port add bridge=internet interface=r77pe1 horizon=1'
+
+        # VRRP
+        r.vm.provision 'routeros_command', name: 'vrrp4', command: "/interface vrrp add name=vrrp1 interface=internet priority=50"
+        r.vm.provision 'routeros_command', name: 'vrrp5', command: "/ip address add address=#{h[:vpls_ip]} interface=internet"
+        r.vm.provision 'routeros_command', name: 'vrrp6', command: "/ip address add address=#{h[:vrrp]} interface=vrrp1"
+        # add default gw
+        r.vm.provision 'routeros_command', name: 'vrrp7', command: "/ip route add dst-address=0.0.0.0/0 gateway=10.0.1.4"
       end
 
       i+=1
