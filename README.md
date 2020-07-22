@@ -15,7 +15,7 @@ Vagrant lab that we use as a test bed for:
 # Configuration
 
 
-* `peer1`, `r1`, `r77` and `peer2` are connected to the network called `internet`
+* `peer1`, `r1`, `r77` and `peer2` are connected to the network called `internet` - `10.0.10.0/24` and `10.0.10.254` is VRRP VIP
 * `r1`, `r77` are connected to the network `core` - we use `192.168.100.0/24`
 * `p1`, `p2` are connect to `core` and `core_pe` - we use `192.168.200.0/24`
 * `pe1`, `pe2` are connect to `core_pe` and `ce`
