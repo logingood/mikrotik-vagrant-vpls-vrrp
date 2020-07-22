@@ -33,10 +33,34 @@ Loops are solved with RSTP
 
 # Usage
 
+Install [Virtualbox](https://www.virtualbox.org/wiki/Downloads) and [Vagrant](https://www.vagrantup.com/downloads).
+
 Bring everything up (takes some time)
 
 ```
 vagrant up
+```
+
+Once it is up, you can verify that everything works by connecting to `ce1` or `ce2`
+```
+vagrant ssh ce1
+```
+
+ping VRRP VIP address that is built over two VPLS bridges on r1 and r77.
+```
+ping 10.0.10.254
+```
+
+ping address `2.2.2.2` which we use to simulate internet host, it is an interface on `peer1`
+
+```
+ping 2.2.2.2
+```
+
+try to take down r1 or r77, and ping shouldn't interrupt.
+
+```
+vagrant halt r1
 ```
 
 Destroying the lab
