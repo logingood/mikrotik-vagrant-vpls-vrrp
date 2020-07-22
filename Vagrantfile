@@ -4,21 +4,25 @@
 routers = {
   peer1: {
     fwd_port: 18040,
-    internet: '10.0.0.1'
+    internet: '10.0.1.3',
+    internet_addr: '1.1.1.1'
   },
   peer2: {
     fwd_port: 18041,
-    internet: '10.0.0.2'
+    internet: '10.0.1.4',
+    internet_addr: '2.2.2.2'
   },
   r1: {
     fwd_port: 18001,
-    internet: '10.0.0.3',
-    ip_core: '192.168.100.11'
+    internet: '10.0.1.1',
+    ip_core: '192.168.100.11',
+    vrrp: '10.0.1.254/32'
   },
   r77: {
     fwd_port: 18077,
     internet: '10.0.1.2',
-    ip_core: '192.168.100.12'
+    ip_core: '192.168.100.12',
+    vrrp: '10.0.1.254/32'
   },
   p1: {
     fwd_port: 18021,
@@ -42,11 +46,13 @@ routers = {
   },
   ce1: {
     fwd_port: 18051,
-    ip_ce: '10.0.0.5'
+    ip_ce: '10.0.1.10',
+    vrrp_gw: '10.0.1.254'
   },
   ce2: {
     fwd_port: 18052,
-    ip_ce: '10.0.0.6'
+    ip_ce: '10.0.2.20',
+    vrrp_gw: '10.0.1.254'
   }
 }
 
@@ -62,6 +68,7 @@ Vagrant.configure("2") do |config|
       if router.to_s == "ce1" || router.to_s == "ce2"
         r.vm.box = "ubuntu/bionic64"
         r.vm.network :private_network, ip: h[:ip_ce].to_s, netmask: 24, name: 'ce', virtualbox__intnet: "ce"
+        r.vm.provision :shell, :inline => "ip route delete default 2>&1 >/dev/null || true; ip route add default via #{h[:vrrp_gw]}"
         i = i + 1
         next
       end
@@ -70,6 +77,7 @@ Vagrant.configure("2") do |config|
       if router.to_s == "peer1" || router.to_s == "peer2"
         r.vm.box = "ubuntu/bionic64"
         r.vm.network :private_network, ip: h[:internet].to_s, netmask: 24, name: 'internet', virtualbox__intnet: "internet"
+        r.vm.provision :shell, :inline => "ifconfig enp0s8:0 #{h[:internet_addr]}/32"
         i = i + 1
         next
       end
@@ -117,6 +125,21 @@ Vagrant.configure("2") do |config|
         r.vm.provision 'routeros_command', name: 'mpls_2', command: "mpls ldp set enabled=yes lsr-id=10.255.255.#{i + 1} transport-address=10.255.255.#{i + 1}"
         r.vm.provision 'routeros_command', name: 'mpls_3', command: "mpls ldp interface add interface=[/interface ethernet get [find mac-address=\"#{gen_mac_c(2, n + i)}\"] name ]" if h[:ip_core]
         r.vm.provision 'routeros_command', name: 'mpls_3', command: "mpls ldp interface add interface=[/interface ethernet get [find mac-address=\"#{gen_mac_c(3, n + i)}\"] name ]" if h[:ip_core_pe]
+      end
+
+      # VRRP provision
+      if router.to_s == 'r1'
+        r.vm.provision 'routeros_command', name: 'vrrp1', command: "/interface vrrp add name=vrrp1 interface=[/interface ethernet get [find mac-address=\"#{gen_mac_c(1, n + i)}\"] name ] priority=100"
+        r.vm.provision 'routeros_command', name: 'vrrp2', command: "/ip address add address=#{h[:vrrp]} interface=vrrp1"
+        # add default gw
+        r.vm.provision 'routeros_command', name: 'vrrp2', command: "/ip route add dst-address=0.0.0.0/0 gateway=10.0.1.4"
+      end
+
+      if router.to_s == 'r77'
+        r.vm.provision 'routeros_command', name: 'vrrp1', command: "/interface vrrp add name=vrrp1 interface=[/interface ethernet get [find mac-address=\"#{gen_mac_c(1, n + i)}\"] name ] priority=50"
+        r.vm.provision 'routeros_command', name: 'vrrp2', command: "/ip address add address=#{h[:vrrp]} interface=vrrp1"
+        # add default gw
+        r.vm.provision 'routeros_command', name: 'vrrp2', command: "/ip route add dst-address=0.0.0.0/0 gateway=10.0.1.4"
       end
 
       # VPLS tunnels, advertise 1508 mtu to squeeze PPPPoE
