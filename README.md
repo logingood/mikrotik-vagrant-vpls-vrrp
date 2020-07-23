@@ -107,6 +107,7 @@ ssh -L 3000:127.0.0.1:3000 vagrant@127.0.0.1 -p 2222  -i /Users/$USERNAME/Code/m
 
 Now you can open [http://127.0.0.1:3000](http://127.0.0.1:3000) in your browser.
 
+![alt text](https://github.com/logingood/mikrotik-vagrant-vpls-vrrp/blob/master/ntopng.png "Export netflow v9 from RouterOS and visualize with ntopng")
 
 # Box images
 
