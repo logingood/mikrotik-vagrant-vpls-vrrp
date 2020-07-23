@@ -81,6 +81,22 @@ Vagrant.configure("2") do |config|
         r.vm.network :private_network, ip: h[:internet].to_s, netmask: 24, name: 'internet', virtualbox__intnet: "internet"
         r.vm.provision :shell, :inline => "ifconfig enp0s8:0 #{h[:internet_addr]}/32"
         r.vm.provision :shell, :inline => "ip route add 10.0.10.0/24 via 10.0.1.254"
+        if router.to_s == "peer1"
+
+          # Configure ntop
+          r.vm.provision :shell, :inline => "add-apt-repository universe && apt-get update"
+          r.vm.provision :shell, :inline => "wget http://apt.ntop.org/18.04/all/apt-ntop.deb"
+          r.vm.provision :shell, :inline => "apt install ./apt-ntop.deb"
+          r.vm.provision :shell, :inline => "apt-get update"
+          r.vm.provision :shell, :inline => "apt-get install -y ntopng nprobe"
+          r.vm.provision :shell, :inline => 'echo \'--interface="tcp://127.0.0.1:5557"\' >> /etc/ntopng/ntopng.conf '
+          r.vm.provision :shell, :inline => 'echo \'-n=none\' >> /etc/nprobe/nprobe.conf '
+          r.vm.provision :shell, :inline => 'echo \'-i=none\' >> /etc/nprobe/nprobe.conf '
+          r.vm.provision :shell, :inline => 'echo \'--zmq="tcp://*:5557"\' >> /etc/nprobe/nprobe.conf '
+          r.vm.provision :shell, :inline => 'echo \'--collector-port=2055\' >> /etc/nprobe/nprobe.conf '
+          r.vm.provision :shell, :inline => 'systemctl restart ntopng'
+          r.vm.provision :shell, :inline => 'systemctl restart nprobe'
+        end
         i = i + 1
         next
       end
@@ -163,6 +179,11 @@ Vagrant.configure("2") do |config|
         # VRRP for internet redundancy
         r.vm.provision 'routeros_command', name: 'vrrp5', command: "/interface vrrp add name=vrrp2 interface=[/interface ethernet get [find mac-address=\"#{gen_mac_c(1, n + i)}\"] name ] priority=100"
         r.vm.provision 'routeros_command', name: 'vrrp3', command: "/ip address add address=10.0.1.254/32 interface=vrrp2"
+
+        # Netflow
+
+        r.vm.provision 'routeros_command', name: 'netflow1', command: "/ip traffic-flow set enabled=yes"
+        r.vm.provision 'routeros_command', name: 'netflow2', command: "/ip traffic-flow target add dst-address=10.0.1.3 port=2055 version=9"
       end
 
       if router.to_s == 'r77'
@@ -184,6 +205,10 @@ Vagrant.configure("2") do |config|
         # VRRP for internet redundancy
         r.vm.provision 'routeros_command', name: 'vrrp5', command: "/interface vrrp add name=vrrp2 interface=[/interface ethernet get [find mac-address=\"#{gen_mac_c(1, n + i)}\"] name ] priority=100"
         r.vm.provision 'routeros_command', name: 'vrrp3', command: "/ip address add address=10.0.1.254/32 interface=vrrp2"
+
+        # Netflow
+        r.vm.provision 'routeros_command', name: 'netflow1', command: "/ip traffic-flow set enabled=yes"
+        r.vm.provision 'routeros_command', name: 'netflow2', command: "/ip traffic-flow target add dst-address=10.0.1.3 port=2055 version=9"
       end
 
       i+=1

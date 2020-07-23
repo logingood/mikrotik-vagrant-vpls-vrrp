@@ -96,6 +96,18 @@ Vagrant allows to do that using the following snippet
       end
 ```
 
+# Netflow V9 and ntopng
+
+For the sake of the experimetn we install [ntopng and nprobe](https://ntop.org) on `peer1` one.
+It could be accessed using ssh tunnel inside vagrant:
+
+```
+ssh -L 3000:127.0.0.1:3000 vagrant@127.0.0.1 -p 2222  -i /Users/$USERNAME/Code/mikrotik-vagrant-vpls-vrrp/.vagrant/machines/peer1/virtualbox/private_key
+```
+
+Now you can open [http://127.0.0.1:3000](http://127.0.0.1:3000) in your browser.
+
+
 # Box images
 
 We are using Vagrant Box published by
