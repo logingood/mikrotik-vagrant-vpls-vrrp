@@ -163,6 +163,11 @@ Vagrant.configure("2") do |config|
         # VRRP for internet redundancy
         r.vm.provision 'routeros_command', name: 'vrrp5', command: "/interface vrrp add name=vrrp2 interface=[/interface ethernet get [find mac-address=\"#{gen_mac_c(1, n + i)}\"] name ] priority=100"
         r.vm.provision 'routeros_command', name: 'vrrp3', command: "/ip address add address=10.0.1.254/32 interface=vrrp2"
+
+        # Netflow
+
+        r.vm.provision 'routeros_command', name: 'netflow1', command: "/ip traffic-flow set enabled=yes"
+        r.vm.provision 'routeros_command', name: 'netflow2', command: "/ip traffic-flow target add dst-address=10.0.1.3 port=2055 version=9"
       end
 
       if router.to_s == 'r77'
@@ -184,6 +189,10 @@ Vagrant.configure("2") do |config|
         # VRRP for internet redundancy
         r.vm.provision 'routeros_command', name: 'vrrp5', command: "/interface vrrp add name=vrrp2 interface=[/interface ethernet get [find mac-address=\"#{gen_mac_c(1, n + i)}\"] name ] priority=100"
         r.vm.provision 'routeros_command', name: 'vrrp3', command: "/ip address add address=10.0.1.254/32 interface=vrrp2"
+
+        # Netflow
+        r.vm.provision 'routeros_command', name: 'netflow1', command: "/ip traffic-flow set enabled=yes"
+        r.vm.provision 'routeros_command', name: 'netflow2', command: "/ip traffic-flow target add dst-address=10.0.1.3 port=2055 version=9"
       end
 
       i+=1
