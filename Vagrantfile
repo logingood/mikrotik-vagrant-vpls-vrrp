@@ -3,7 +3,7 @@
 
 routers = {
   peer1: {
-    fwd_port: 18040,
+    fwd_port_ntopng: 3000,
     internet: '10.0.1.3',
     internet_addr: '1.1.1.1'
   },
@@ -17,14 +17,18 @@ routers = {
     internet: '10.0.1.1',
     ip_core: '192.168.100.11',
     vpls_ip: '10.0.10.1/24',
-    vrrp: '10.0.10.254/32'
+    vpls2_ip: '10.0.20.1/24',
+    vrrp: '10.0.10.254/32',
+    vrrp2: '10.0.20.254/32'
   },
   r77: {
     fwd_port: 18077,
     internet: '10.0.1.2',
     ip_core: '192.168.100.12',
     vpls_ip: '10.0.10.77/24',
-    vrrp: '10.0.10.254/32'
+    vpls2_ip: '10.0.20.77/24',
+    vrrp: '10.0.10.254/32',
+    vrrp2: '10.0.20.254/32'
   },
   p1: {
     fwd_port: 18021,
@@ -44,7 +48,7 @@ routers = {
   pe2: {
     fwd_port: 18032,
     ip_core_pe: '192.168.200.112',
-    ip_ce: '192.168.210.12'
+    ip_ce2: '192.168.210.12'
   },
   ce1: {
     fwd_port: 18051,
@@ -53,8 +57,8 @@ routers = {
   },
   ce2: {
     fwd_port: 18052,
-    ip_ce: '10.0.10.20',
-    vrrp_gw: '10.0.10.254'
+    ip_ce2: '10.0.20.20',
+    vrrp_gw: '10.0.20.254'
   }
 }
 
@@ -67,9 +71,17 @@ Vagrant.configure("2") do |config|
       n = rand(5)
       r.vm.hostname = router.to_s
       # Use ubuntu VMs as Clients
-      if router.to_s == "ce1" || router.to_s == "ce2"
+      if router.to_s == "ce1"
         r.vm.box = "ubuntu/bionic64"
         r.vm.network :private_network, ip: h[:ip_ce].to_s, netmask: 24, name: 'ce', virtualbox__intnet: "ce"
+        r.vm.provision :shell, :inline => "ip route delete default 2>&1 >/dev/null || true; ip route add default via #{h[:vrrp_gw]}"
+        i = i + 1
+        next
+      end
+
+      if router.to_s == "ce2"
+        r.vm.box = "ubuntu/bionic64"
+        r.vm.network :private_network, ip: h[:ip_ce2].to_s, netmask: 24, name: 'ce2', virtualbox__intnet: "ce2"
         r.vm.provision :shell, :inline => "ip route delete default 2>&1 >/dev/null || true; ip route add default via #{h[:vrrp_gw]}"
         i = i + 1
         next
@@ -96,6 +108,8 @@ Vagrant.configure("2") do |config|
           r.vm.provision :shell, :inline => 'echo \'--collector-port=2055\' >> /etc/nprobe/nprobe.conf '
           r.vm.provision :shell, :inline => 'systemctl restart ntopng'
           r.vm.provision :shell, :inline => 'systemctl restart nprobe'
+
+          r.vm.network "forwarded_port", guest: 3000, host: h[:fwd_port_ntopng]
         end
         i = i + 1
         next
@@ -105,7 +119,7 @@ Vagrant.configure("2") do |config|
 
       r.vm.provider "virtualbox" do |virtualbox|
         virtualbox.customize ["modifyvm", :id, "--nicpromisc3", "allow-all"] if h[:ip_core] || h[:ip_core_pe]
-        virtualbox.customize ["modifyvm", :id, "--nicpromisc4", "allow-all"] if h[:ip_ce] || h[:internet]
+        virtualbox.customize ["modifyvm", :id, "--nicpromisc4", "allow-all"] if h[:ip_ce] || h[:internet] || h[:ip_ce2]
       end
 
       r.vm.network "forwarded_port", guest: 80, host: h[:fwd_port]
@@ -113,12 +127,14 @@ Vagrant.configure("2") do |config|
       r.vm.network :private_network, auto_config: false, nic_type: "virtio", name: 'core', virtualbox__intnet: "core", mac: gen_mac(2, n + i), mtu: 2000 if h[:ip_core]
       r.vm.network :private_network, auto_config: false, nic_type: "virtio", name: 'core_pe', virtualbox__intnet: "core_pe", mac: gen_mac(3, n + i), mtu: 2000 if h[:ip_core_pe]
       r.vm.network :private_network, auto_config: false, nic_type: "virtio", name: 'ce', virtualbox__intnet: "ce", mac: gen_mac(4, n + i ) if h[:ip_ce]
+      r.vm.network :private_network, auto_config: false, nic_type: "virtio", name: 'ce2', virtualbox__intnet: "ce2", mac: gen_mac(5, n + i ) if h[:ip_ce2]
 
       #  provision ip addresses (default image doesn't have provisioner)
       r.vm.provision "routeros_command", name: "ip1", command: "ip address add address=#{h[:internet]}/24 interface=[/interface ethernet get [find mac-address=\"#{gen_mac_c(1, n + i)}\"] name ]" if h[:internet]
       r.vm.provision "routeros_command", name: "ip2", command: "ip address add address=#{h[:ip_core]}/24 interface=[/interface ethernet get [find mac-address=\"#{gen_mac_c(2, n + i)}\"] name ]" if h[:ip_core]
       r.vm.provision "routeros_command", name: "ip3", command: "ip address add address=#{h[:ip_core_pe]}/24 interface=[/interface ethernet get [find mac-address=\"#{gen_mac_c(3, n + i)}\"] name ]" if h[:ip_core_pe]
       r.vm.provision "routeros_command", name: "ip4", command: "ip address add address=#{h[:ip_ce]}/24 interface=[/interface ethernet get [find mac-address=\"#{gen_mac_c(4, n + i)}\"] name ]" if h[:ip_ce]
+      r.vm.provision "routeros_command", name: "ip4", command: "ip address add address=#{h[:ip_ce2]}/24 interface=[/interface ethernet get [find mac-address=\"#{gen_mac_c(5, n + i)}\"] name ]" if h[:ip_ce2]
 
       unless (router.to_s == 'ce1' || router.to_s == 'ce2' || router.to_s == 'peer1' || router.to_s == 'peer2')
         # MTU  ACTUAL MTU > MPLS MTU > IP MTU
@@ -155,30 +171,63 @@ Vagrant.configure("2") do |config|
         r.vm.provision 'routeros_command', name: 'vpls4', command: '/interface vpls add disabled=no name=pe1r77 remote-peer=10.255.255.4 vpls-id=100:1'
         r.vm.provision 'routeros_command', name: 'vpls5', command: '/interface bridge port add bridge=internet interface=pe1r77 horizon=1'
 
-        # add port to ce1/ce2
+        # add port to ce1
         r.vm.provision 'routeros_command', name: 'vpls6', command: "/interface bridge port add bridge=internet interface=[/interface ethernet get [find mac-address=\"#{gen_mac_c(4, n + i)}\"] name ]"
 
       end
 
+      if router.to_s == 'pe2'
+        r.vm.provision 'routeros_command', name: 'vpls1', command: '/interface bridge add name=internet'
+        # PE2 <-> R1
+        r.vm.provision 'routeros_command', name: 'vpls2', command: '/interface vpls add disabled=no name=pe2r1 remote-peer=10.255.255.3 vpls-id=100:2'
+        r.vm.provision 'routeros_command', name: 'vpls3', command: '/interface bridge port add bridge=internet interface=pe2r1 horizon=1'
+
+
+        # PE1 <-> R77
+        r.vm.provision 'routeros_command', name: 'vpls4', command: '/interface vpls add disabled=no name=pe2r77 remote-peer=10.255.255.4 vpls-id=100:2'
+        r.vm.provision 'routeros_command', name: 'vpls5', command: '/interface bridge port add bridge=internet interface=pe2r77 horizon=1'
+
+        # add port to ce2
+        r.vm.provision 'routeros_command', name: 'vpls6', command: "/interface bridge port add bridge=internet interface=[/interface ethernet get [find mac-address=\"#{gen_mac_c(5, n + i)}\"] name ]"
+      end
+
       if router.to_s == 'r1'
         r.vm.provision 'routeros_command', name: 'vpls7', command: '/interface bridge add name=internet'
+        r.vm.provision 'routeros_command', name: 'vpls7', command: '/interface bridge add name=internet2'
 
         r.vm.provision 'routeros_command', name: 'vpls8', command: '/interface vpls add disabled=no name=r1r77 remote-peer=10.255.255.4 vpls-id=100:1'
         r.vm.provision 'routeros_command', name: 'vpls9', command: '/interface bridge port add bridge=internet interface=r1r77 horizon=1'
 
-        r.vm.provision 'routeros_command', name: 'vpls10', command: '/interface vpls add disabled=no name=r1pe1 remote-peer=10.255.255.7 vpls-id=100:1'
-        r.vm.provision 'routeros_command', name: 'vpls11', command: '/interface bridge port add bridge=internet interface=r1pe1 horizon=1'
+        r.vm.provision 'routeros_command', name: 'vpls10', command: '/interface vpls add disabled=no name=r1r77-2 remote-peer=10.255.255.7 vpls-id=100:2'
+        r.vm.provision 'routeros_command', name: 'vpls11', command: '/interface bridge port add bridge=internet2 interface=r1r77-2 horizon=1'
 
-        # VRRP for VPLS
+        # Extra r1 <-> r77 tunnel for vpls id 100:2 for the second VRRP group - for ce2
+        r.vm.provision 'routeros_command', name: 'vpls12', command: '/interface vpls add disabled=no name=r1pe1 remote-peer=10.255.255.7 vpls-id=100:1'
+        r.vm.provision 'routeros_command', name: 'vpls13', command: '/interface bridge port add bridge=internet interface=r1pe1 horizon=1'
+
+        r.vm.provision 'routeros_command', name: 'vpls17', command: '/interface vpls add disabled=no name=r1pe2 remote-peer=10.255.255.8 vpls-id=100:2'
+        r.vm.provision 'routeros_command', name: 'vpls18', command: '/interface bridge port add bridge=internet2 interface=r1pe2 horizon=1'
+
+        # VRRP for VPLS for ce1 priority 100
         r.vm.provision 'routeros_command', name: 'vrrp1', command: "/interface vrrp add name=vrrp1 interface=internet priority=100"
         r.vm.provision 'routeros_command', name: 'vrrp2', command: "/ip address add address=#{h[:vpls_ip]} interface=internet"
         r.vm.provision 'routeros_command', name: 'vrrp3', command: "/ip address add address=#{h[:vrrp]} interface=vrrp1"
+
+        # VRRP for VPLS second group for ce2 priority 50
+        r.vm.provision 'routeros_command', name: 'vrrp1', command: "/interface vrrp add name=vrrp2 interface=internet2 priority=50"
+        r.vm.provision 'routeros_command', name: 'vrrp2', command: "/ip address add address=#{h[:vpls2_ip]} interface=internet2"
+        r.vm.provision 'routeros_command', name: 'vrrp3', command: "/ip address add address=#{h[:vrrp2]} interface=vrrp2"
+
         # add default gw
-        r.vm.provision 'routeros_command', name: 'vrrp4', command: "/ip route add dst-address=0.0.0.0/0 gateway=10.0.1.4"
+        r.vm.provision 'routeros_command', name: 'vrrp4', command: "/ip route add dst-address=2.2.2.2/32 gateway=10.0.1.4"
+        r.vm.provision 'routeros_command', name: 'vrrp7', command: "/ip route add dst-address=0.0.0.0/0 gateway=10.0.2.2"
+
+        # nat for the internet to test netflow export
+        r.vm.provision 'routeros_command', name: 'nat1', command: "/ip firewall nat add action=masquerade chain=srcnat out-interface=host_nat"
 
         # VRRP for internet redundancy
-        r.vm.provision 'routeros_command', name: 'vrrp5', command: "/interface vrrp add name=vrrp2 interface=[/interface ethernet get [find mac-address=\"#{gen_mac_c(1, n + i)}\"] name ] priority=100"
-        r.vm.provision 'routeros_command', name: 'vrrp3', command: "/ip address add address=10.0.1.254/32 interface=vrrp2"
+        r.vm.provision 'routeros_command', name: 'vrrp5', command: "/interface vrrp add name=vrrp3 interface=[/interface ethernet get [find mac-address=\"#{gen_mac_c(1, n + i)}\"] name ] priority=100"
+        r.vm.provision 'routeros_command', name: 'vrrp3', command: "/ip address add address=10.0.1.254/32 interface=vrrp3"
 
         # Netflow
 
@@ -187,24 +236,43 @@ Vagrant.configure("2") do |config|
       end
 
       if router.to_s == 'r77'
-        r.vm.provision 'routeros_command', name: 'vpls12', command: '/interface bridge add name=internet'
+        r.vm.provision 'routeros_command', name: 'vpls11', command: '/interface bridge add name=internet'
+        r.vm.provision 'routeros_command', name: 'vpls12', command: '/interface bridge add name=internet2'
 
         r.vm.provision 'routeros_command', name: 'vpls13', command: '/interface vpls add disabled=no name=r77r1 remote-peer=10.255.255.3 vpls-id=100:1'
         r.vm.provision 'routeros_command', name: 'vpls14', command: '/interface bridge port add bridge=internet interface=r77r1 horizon=1'
 
+        r.vm.provision 'routeros_command', name: 'vpls13', command: '/interface vpls add disabled=no name=r77r1-2 remote-peer=10.255.255.3 vpls-id=100:2'
+        r.vm.provision 'routeros_command', name: 'vpls14', command: '/interface bridge port add bridge=internet2 interface=r77r1-2 horizon=1'
+
+        # Extra r77 <-> r1 tunnel for vpls id 100:2 for the second VRRP group - for ce2
+
         r.vm.provision 'routeros_command', name: 'vpls15', command: '/interface vpls add disabled=no name=r77pe1 remote-peer=10.255.255.7 vpls-id=100:1'
         r.vm.provision 'routeros_command', name: 'vpls16', command: '/interface bridge port add bridge=internet interface=r77pe1 horizon=1'
 
-        # VRRP for VPLS
+        r.vm.provision 'routeros_command', name: 'vpls17', command: '/interface vpls add disabled=no name=r77pe2 remote-peer=10.255.255.8 vpls-id=100:2'
+        r.vm.provision 'routeros_command', name: 'vpls18', command: '/interface bridge port add bridge=internet2 interface=r77pe2 horizon=1'
+
+        # VRRP for VPLS 1 priorty 50
         r.vm.provision 'routeros_command', name: 'vrrp1', command: "/interface vrrp add name=vrrp1 interface=internet priority=50"
         r.vm.provision 'routeros_command', name: 'vrrp2', command: "/ip address add address=#{h[:vpls_ip]} interface=internet"
         r.vm.provision 'routeros_command', name: 'vrrp3', command: "/ip address add address=#{h[:vrrp]} interface=vrrp1"
+
+        # VRRP for VPLS 1 priority 100
+        r.vm.provision 'routeros_command', name: 'vrrp4', command: "/interface vrrp add name=vrrp2 interface=internet2 priority=100"
+        r.vm.provision 'routeros_command', name: 'vrrp5', command: "/ip address add address=#{h[:vpls2_ip]} interface=internet2"
+        r.vm.provision 'routeros_command', name: 'vrrp6', command: "/ip address add address=#{h[:vrrp2]} interface=vrrp2"
+
         # add default gw
-        r.vm.provision 'routeros_command', name: 'vrrp4', command: "/ip route add dst-address=0.0.0.0/0 gateway=10.0.1.4"
+        r.vm.provision 'routeros_command', name: 'vrrp7', command: "/ip route add dst-address=0.0.0.0/0 gateway=10.0.2.2"
+        r.vm.provision 'routeros_command', name: 'vrrp8', command: "/ip route add dst-address=1.1.1.1/32 gateway=10.0.1.3"
+
+        # nat for the internet to test netflow export
+        r.vm.provision 'routeros_command', name: 'nat1', command: "/ip firewall nat add action=masquerade chain=srcnat out-interface=host_nat"
 
         # VRRP for internet redundancy
-        r.vm.provision 'routeros_command', name: 'vrrp5', command: "/interface vrrp add name=vrrp2 interface=[/interface ethernet get [find mac-address=\"#{gen_mac_c(1, n + i)}\"] name ] priority=100"
-        r.vm.provision 'routeros_command', name: 'vrrp3', command: "/ip address add address=10.0.1.254/32 interface=vrrp2"
+        r.vm.provision 'routeros_command', name: 'vrrp8', command: "/interface vrrp add name=vrrp3 interface=[/interface ethernet get [find mac-address=\"#{gen_mac_c(1, n + i)}\"] name ] priority=100"
+        r.vm.provision 'routeros_command', name: 'vrrp9', command: "/ip address add address=10.0.1.254/32 interface=vrrp3"
 
         # Netflow
         r.vm.provision 'routeros_command', name: 'netflow1', command: "/ip traffic-flow set enabled=yes"
