@@ -3,7 +3,7 @@
 
 routers = {
   peer1: {
-    fwd_port: 18040,
+    fwd_port_ntopng: 3000,
     internet: '10.0.1.3',
     internet_addr: '1.1.1.1'
   },
@@ -108,6 +108,8 @@ Vagrant.configure("2") do |config|
           r.vm.provision :shell, :inline => 'echo \'--collector-port=2055\' >> /etc/nprobe/nprobe.conf '
           r.vm.provision :shell, :inline => 'systemctl restart ntopng'
           r.vm.provision :shell, :inline => 'systemctl restart nprobe'
+
+          r.vm.network "forwarded_port", guest: 3000, host: h[:fwd_port_ntopng]
         end
         i = i + 1
         next
