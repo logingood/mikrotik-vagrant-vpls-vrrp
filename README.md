@@ -39,7 +39,10 @@ VRRP is built in the way that we can send 50% of traffic (from ce1) to R1 and an
 * interface called `internet` (bridge) of `r1` and `r77`. For the first VRRP group `r1` is a master with priority 100.
 * interface called `internet2` (bridge) of `r1` and `r77`. For the second VRRP group `r77` is a master with priority 100.
 
-VPLS brdige loops are solved with RSTP
+VPLS brdige loops are solved with [bridge split
+horizon](https://wiki.mikrotik.com/wiki/Manual:MPLSVPLS#Split_horizon_bridging)
+on PE routers. RSTP could be used as well but the alternative link will remain
+inactive, which would increase VRRP failover time.
 
 `peer1`, `peer2`, `ce1`, `ce2` are ubuntu18 VMs.
 
