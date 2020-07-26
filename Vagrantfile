@@ -81,7 +81,7 @@ Vagrant.configure("2") do |config|
 
       if router.to_s == "ce2"
         r.vm.box = "ubuntu/bionic64"
-        r.vm.network :private_network, mac: gen_mac(10, 1), ip: '10.0.20.25', autoconfig: false, name: 'ce2', virtualbox__intnet: "ce2"
+        r.vm.network :private_network, mac: gen_mac(8, 2), ip: '10.0.20.25', autoconfig: false, name: 'ce2', virtualbox__intnet: "ce2"
         r.vm.provision :shell, :inline => "ip route delete default 2>&1 >/dev/null || true; ip route add default via #{h[:vrrp_gw]}"
         i = i + 1
         next
@@ -116,7 +116,7 @@ Vagrant.configure("2") do |config|
         if router.to_s == "peer2"
           r.vm.provision :shell, :inline =>  provision_freeradius
           r.vm.provision :shell, :inline =>  provision_freeradius_macs(gen_mac_c(9, 1), '10.0.10.25', '1M')
-          r.vm.provision :shell, :inline =>  provision_freeradius_macs(gen_mac_c(10, 1), '10.0.20.35', '1M')
+          r.vm.provision :shell, :inline =>  provision_freeradius_macs(gen_mac_c(8, 2), '10.0.20.35', '1M')
 
           r.vm.provision "file", source: "freeradius-default", destination: "/tmp/default"
           r.vm.provision "file", source: "freeradius-sql", destination: "/tmp/sql"
