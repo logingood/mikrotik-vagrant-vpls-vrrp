@@ -73,7 +73,7 @@ Vagrant.configure("2") do |config|
       # Use ubuntu VMs as Clients
       if router.to_s == "ce1"
         r.vm.box = "ubuntu/bionic64"
-        r.vm.network :private_network, mac: gen_mac(9, 1), type: 'dchp', name: 'ce', virtualbox__intnet: "ce"
+        r.vm.network :private_network, mac: gen_mac(9, 1), ip: '10.0.10.15', autoconfig: false, name: 'ce', virtualbox__intnet: "ce"
         r.vm.provision :shell, :inline => "ip route delete default 2>&1 >/dev/null || true; ip route add default via #{h[:vrrp_gw]}"
         i = i + 1
         next
@@ -81,7 +81,7 @@ Vagrant.configure("2") do |config|
 
       if router.to_s == "ce2"
         r.vm.box = "ubuntu/bionic64"
-        r.vm.network :private_network, mac: gen_mac(10, 1), type: 'dhcp', name: 'ce2', virtualbox__intnet: "ce2"
+        r.vm.network :private_network, mac: gen_mac(10, 1), ip: '10.0.20.25', autoconfig: false, name: 'ce2', virtualbox__intnet: "ce2"
         r.vm.provision :shell, :inline => "ip route delete default 2>&1 >/dev/null || true; ip route add default via #{h[:vrrp_gw]}"
         i = i + 1
         next
@@ -340,7 +340,7 @@ def provision_freeradius
 
   echo client MIKROTIK { >> /etc/freeradius/3.0/clients.conf
   echo  ipaddr = 10.0.0.0/8 >> /etc/freeradius/3.0/clients.conf
-  echo  secret = password >> /etc/freeradius/3.0/clients.conf
+  echo  secret = mikrotik123 >> /etc/freeradius/3.0/clients.conf
   echo } >> /etc/freeradius/3.0/clients.conf
 SCRIPT
 end
