@@ -73,7 +73,7 @@ Vagrant.configure("2") do |config|
       # Use ubuntu VMs as Clients
       if router.to_s == "ce1"
         r.vm.box = "ubuntu/bionic64"
-        r.vm.network :private_network, ip: h[:ip_ce].to_s, netmask: 24, name: 'ce', virtualbox__intnet: "ce"
+        r.vm.network :private_network, mac: gen_mac(9, 1), ip: '10.0.10.15', autoconfig: false, name: 'ce', virtualbox__intnet: "ce"
         r.vm.provision :shell, :inline => "ip route delete default 2>&1 >/dev/null || true; ip route add default via #{h[:vrrp_gw]}"
         i = i + 1
         next
@@ -81,7 +81,7 @@ Vagrant.configure("2") do |config|
 
       if router.to_s == "ce2"
         r.vm.box = "ubuntu/bionic64"
-        r.vm.network :private_network, ip: h[:ip_ce2].to_s, netmask: 24, name: 'ce2', virtualbox__intnet: "ce2"
+        r.vm.network :private_network, mac: gen_mac(8, 2), ip: '10.0.20.25', autoconfig: false, name: 'ce2', virtualbox__intnet: "ce2"
         r.vm.provision :shell, :inline => "ip route delete default 2>&1 >/dev/null || true; ip route add default via #{h[:vrrp_gw]}"
         i = i + 1
         next
@@ -110,6 +110,21 @@ Vagrant.configure("2") do |config|
           r.vm.provision :shell, :inline => 'systemctl restart nprobe'
 
           r.vm.network "forwarded_port", guest: 3000, host: h[:fwd_port_ntopng]
+        end
+
+        # put freeradisu on peer2
+        if router.to_s == "peer2"
+          r.vm.provision :shell, :inline =>  provision_freeradius
+          r.vm.provision :shell, :inline =>  provision_freeradius_macs(gen_mac_c(9, 1), '10.0.10.25', '1M')
+          r.vm.provision :shell, :inline =>  provision_freeradius_macs(gen_mac_c(8, 2), '10.0.20.35', '1M')
+
+          r.vm.provision "file", source: "freeradius-default", destination: "/tmp/default"
+          r.vm.provision "file", source: "freeradius-sql", destination: "/tmp/sql"
+
+          r.vm.provision :shell, :inline => 'cp /tmp/default  /etc/freeradius/3.0/sites-available/default'
+          r.vm.provision :shell, :inline => 'cp /tmp/sql  /etc/freeradius/3.0/mods-enabled/sql'
+
+          r.vm.provision :shell, :inline => 'service freeradius restart'
         end
         i = i + 1
         next
@@ -233,6 +248,15 @@ Vagrant.configure("2") do |config|
 
         r.vm.provision 'routeros_command', name: 'netflow1', command: "/ip traffic-flow set enabled=yes"
         r.vm.provision 'routeros_command', name: 'netflow2', command: "/ip traffic-flow target add dst-address=10.0.1.3 port=2055 version=9"
+
+        r.vm.provision 'routeros_command', name: 'radius1', command: '/radius add address=10.0.1.4 secret=mikrotik123 service=dhcp'
+        r.vm.provision 'routeros_command', name: 'pool1', command: '/ip pool add name=ce1 ranges=10.0.10.0/26'
+        r.vm.provision 'routeros_command', name: 'pool2', command: '/ip pool add name=ce2 ranges=10.0.20.0/26'
+
+        r.vm.provision 'routeros_command', name: 'dhcp1', command: '/ip dhcp-server add add-arp=yes disabled=no interface=internet lease-time=30m name=ce1 use-radius=yes'
+        r.vm.provision 'routeros_command', name: 'dhcp2', command: '/ip dhcp-server add add-arp=yes disabled=no interface=internet2 lease-time=30m name=ce2 use-radius=yes'
+        r.vm.provision 'routeros_command', name: 'dhcp3', command: '/ip dhcp-server network add address=10.0.10.0/26 dns-server=8.8.8.8 gateway=10.0.10.254 netmask=24'
+        r.vm.provision 'routeros_command', name: 'dhcp4', command: '/ip dhcp-server network add address=10.0.20.0/26 dns-server=8.8.8.8 gateway=10.0.20.254 netmask=24'
       end
 
       if router.to_s == 'r77'
@@ -277,6 +301,15 @@ Vagrant.configure("2") do |config|
         # Netflow
         r.vm.provision 'routeros_command', name: 'netflow1', command: "/ip traffic-flow set enabled=yes"
         r.vm.provision 'routeros_command', name: 'netflow2', command: "/ip traffic-flow target add dst-address=10.0.1.3 port=2055 version=9"
+
+        r.vm.provision 'routeros_command', name: 'radius1', command: '/radius add address=10.0.1.4 secret=mikrotik123 service=dhcp'
+        r.vm.provision 'routeros_command', name: 'pool1', command: '/ip pool add name=ce1 ranges=10.0.10.0/26'
+        r.vm.provision 'routeros_command', name: 'pool2', command: '/ip pool add name=ce2 ranges=10.0.20.0/26'
+
+        r.vm.provision 'routeros_command', name: 'dhcp1', command: '/ip dhcp-server add add-arp=yes disabled=no interface=internet lease-time=30m name=ce1 use-radius=yes'
+        r.vm.provision 'routeros_command', name: 'dhcp2', command: '/ip dhcp-server add add-arp=yes disabled=no interface=internet2 lease-time=30m name=ce2 use-radius=yes'
+        r.vm.provision 'routeros_command', name: 'dhcp3', command: '/ip dhcp-server network add address=10.0.10.0/26 dns-server=8.8.8.8 gateway=10.0.10.254 netmask=24'
+        r.vm.provision 'routeros_command', name: 'dhcp4', command: '/ip dhcp-server network add address=10.0.20.0/26 dns-server=8.8.8.8 gateway=10.0.20.254 netmask=24'
       end
 
       i+=1
@@ -290,4 +323,31 @@ end
 
 def gen_mac_c(i, j)
   "08:00:27:11:11:" + i.to_s + (j).to_s(16).upcase
+end
+
+def provision_freeradius
+  <<-SCRIPT
+  add-apt-repository universe && apt-get update
+  apt-get install -y freeradius freeradius-mysql mysql-server
+
+  mysql -e 'CREATE DATABASE radius;' -u root
+  mysql -e 'CREATE USER radius@"localhost" IDENTIFIED BY "radius"' -u root
+  mysql -e 'FLUSH PRIVILEGES;' -u root
+  mysql -e 'GRANT ALL ON radius.* TO radius@"localhost" IDENTIFIED BY "radius";' -u root
+
+  mysql -u root radius < /etc/freeradius/3.0/mods-config/sql/main/mysql/schema.sql
+  mysql -u root radius < /etc/freeradius/3.0/mods-config/sql/main/mysql/setup.sql
+
+  echo client MIKROTIK { >> /etc/freeradius/3.0/clients.conf
+  echo  ipaddr = 10.0.0.0/8 >> /etc/freeradius/3.0/clients.conf
+  echo  secret = mikrotik123 >> /etc/freeradius/3.0/clients.conf
+  echo } >> /etc/freeradius/3.0/clients.conf
+SCRIPT
+end
+
+def provision_freeradius_macs(mac, ip, speed)
+  <<-SCRIPT
+  mysql radius -u root -e 'INSERT INTO `radcheck` (`username`, `attribute`, `op`, `value`) VALUES ("#{mac}", "Auth-Type", ":=", "Accept")'
+  mysql radius -u root -e 'INSERT INTO `radreply` (`username`, `attribute`, `op`, `value`) VALUES ("#{mac}","Framed-IP-Address", "=", "#{ip}"), ("#{mac}","Mikrotik-Rate-Limit", "=", "#{speed}");'
+  SCRIPT
 end
