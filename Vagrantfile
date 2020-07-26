@@ -254,9 +254,9 @@ Vagrant.configure("2") do |config|
         r.vm.provision 'routeros_command', name: 'pool2', command: '/ip pool add name=ce2 ranges=10.0.20.0/26'
 
         r.vm.provision 'routeros_command', name: 'dhcp1', command: '/ip dhcp-server add add-arp=yes disabled=no interface=internet lease-time=30m name=ce1 use-radius=yes'
-        r.vm.provision 'routeros_command', name: 'dhcp2', command: '/ip dhcp-server add add-arp=yes disabled=no interface=internet lease-time=30m name=ce2 use-radius=yes'
-        r.vm.provision 'routeros_command', name: 'dhcp3', command: '/ip dhcp-server network add dns-server=8.8.8.8 gateway=10.0.10.254 netmask=24'
-        r.vm.provision 'routeros_command', name: 'dhcp4', command: '/ip dhcp-server network add dns-server=8.8.8.8 gateway=10.0.20.254 netmask=24'
+        r.vm.provision 'routeros_command', name: 'dhcp2', command: '/ip dhcp-server add add-arp=yes disabled=no interface=internet2 lease-time=30m name=ce2 use-radius=yes'
+        r.vm.provision 'routeros_command', name: 'dhcp3', command: '/ip dhcp-server network add address=10.0.10.0/26 dns-server=8.8.8.8 gateway=10.0.10.254 netmask=24'
+        r.vm.provision 'routeros_command', name: 'dhcp4', command: '/ip dhcp-server network add address=10.0.20.0/26 dns-server=8.8.8.8 gateway=10.0.20.254 netmask=24'
       end
 
       if router.to_s == 'r77'
@@ -307,9 +307,9 @@ Vagrant.configure("2") do |config|
         r.vm.provision 'routeros_command', name: 'pool2', command: '/ip pool add name=ce2 ranges=10.0.20.0/26'
 
         r.vm.provision 'routeros_command', name: 'dhcp1', command: '/ip dhcp-server add add-arp=yes disabled=no interface=internet lease-time=30m name=ce1 use-radius=yes'
-        r.vm.provision 'routeros_command', name: 'dhcp2', command: '/ip dhcp-server add add-arp=yes disabled=no interface=internet lease-time=30m name=ce2 use-radius=yes'
-        r.vm.provision 'routeros_command', name: 'dhcp3', command: '/ip dhcp-server network add dns-server=8.8.8.8 gateway=10.0.10.254 netmask=24'
-        r.vm.provision 'routeros_command', name: 'dhcp4', command: '/ip dhcp-server network add dns-server=8.8.8.8 gateway=10.0.20.254 netmask=24'
+        r.vm.provision 'routeros_command', name: 'dhcp2', command: '/ip dhcp-server add add-arp=yes disabled=no interface=internet2 lease-time=30m name=ce2 use-radius=yes'
+        r.vm.provision 'routeros_command', name: 'dhcp3', command: '/ip dhcp-server network add address=10.0.10.0/26 dns-server=8.8.8.8 gateway=10.0.10.254 netmask=24'
+        r.vm.provision 'routeros_command', name: 'dhcp4', command: '/ip dhcp-server network add address=10.0.20.0/26 dns-server=8.8.8.8 gateway=10.0.20.254 netmask=24'
       end
 
       i+=1
